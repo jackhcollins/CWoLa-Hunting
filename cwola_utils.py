@@ -495,8 +495,26 @@ class check_eff(keras.callbacks.Callback):
 
             # If we have waited too long with no improvement, halt training.
             if (self.patience > 0) & (self.n_wait > self.patience):
+                if self.verbose > -1:
+                    plt.close('all')
+                    plt.figure(figsize=(14,5))
+                    plt.subplot(1, 2, 1)
+                    plt.plot(self.effs_val,color='C1')
+                    plt.plot(self.effs_train,color='C0')
+                    if(self.avg_length > 1):
+                        plt.plot(self.effs_val_avg,color='C1',linestyle='--')
+                        plt.plot(self.effs_train_avg,color='C0',linestyle='--')
+                    plt.grid(b=True)
+                    plt.subplot(1, 2, 2)
+                    plt.plot(self.val_loss,color='C1')
+                    plt.plot(self.loss,color='C0')
+                    plt.grid(b=True)
+                    plt.savefig(self.filename[:-3] + "_losseffplots.png")
+                    self.verbose = 0
                 self.model.stop_training = True
-            
+
+
+                
         if (self.verbose > 1) & (epoch % self.plot_period == 0):
             plt.subplot(1, 2, 2)
             plt.plot(self.val_loss,color='C1')
@@ -526,15 +544,18 @@ class print_scatter_checkpoint(keras.callbacks.Callback):
                  period=5,
                  batch_size = 5000,
                  training_data=[],
-                 no_mass = False,
                  preprocess = None):
         self.verbose=verbose
         self.filename=filename
         self.axes_list = axes_list
         self.period = period
         self.training_data=training_data
-        self.no_mass = no_mass
-        self.preprocess = preprocess
+        def null_preprocess(data):
+            return data
+        if preprocess == None:
+            self.preprocess = null_preprocess
+        else:
+            self.preprocess = preprocess
         self.axes_labels=axes_labels
         self.batch_size = batch_size
         
@@ -547,16 +568,8 @@ class print_scatter_checkpoint(keras.callbacks.Callback):
                 data = self.training_data
             else:
                 data = self.validation_data[0]
-            if self.no_mass:
-                if self.preprocess != None:
-                    predictions = self.model.predict(self.preprocess(data[:,2:],batch_size=self.batch_size)).flatten()
-                else:
-                    predictions = self.model.predict(data[:,2:],batch_size=self.batch_size).flatten()
-            else:
-                if self.preprocess != None:
-                    predictions = self.model.predict(self.preprocess(data),batch_size=self.batch_size).flatten()
-                else:
-                    predictions = self.model.predict(data,batch_size=self.batch_size).flatten()
+
+            predictions = self.model.predict(self.preprocess(data),batch_size=self.batch_size).flatten()
             
             plt.close('all')
             AddPredictionsToScatter(data, predictions,axes_list=self.axes_list,axes_labels=self.axes_labels)
