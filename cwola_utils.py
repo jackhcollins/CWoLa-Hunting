@@ -47,6 +47,7 @@ class model_ensemble:
         self.eff_for_thresh = eff_for_thresh
         
         self.models = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
+        self.model_filenames = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
         self.model_hists = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
         self.effs_valid = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
         self.effs_train = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
@@ -56,6 +57,8 @@ class model_ensemble:
         self.predictions_valid = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
         self.predictions_train = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
         self.thresholds = [[[] for l in range(kfolds-1)] for k in range(kfolds)]
+        self.ensemble_models = [None for k in range(kfolds)]
+        self.ensemble_model_names = [None for k in range(kfolds)]
         
         self.current_trainval_data = None
         self.current_k = None
@@ -162,8 +165,48 @@ class model_ensemble:
             
         return self.current_trainval_data
     
+
+    def reload_model(self,k,l,i):
+        if l > k:
+            l = l - 1
+        self.models[k][l][i] = keras.models.load_model(self.model_filenames[k][l][i])
+
+    def reload_models(self,k,l):
+        if l > k:
+            l = l - 1
+        for i in range(len(self.models[k][l])):
+            self.models[k][l][i] = keras.models.load_model(self.model_filenames[k][l][i])
+
+    def reload_best_model(self,k,l):
+        if l > k:
+            l = l - 1
+        i = np.argmax(self.effs_valid[k][l])
+        self.models[k][l][i] = keras.models.load_model(self.model_filenames[k][l][i])
+        
+    def makeandsave_ensemble_model(self,k,modelname,load=True):
+        modelset = []
+        for l in range(self.kfolds-1):
+            i = np.argmax(self.effs_valid[k][l])
+            if load:
+                modelset.append(keras.models.load_model(self.model_filenames[k][l][i]))
+            else:
+                modelset.append(self.models[k][l][i])
+        numvars = modelset[0].layers[0].input.get_shape().as_list()[1]
+        singleInput = keras.layers.Input((numvars,))
+        outs = [one_model(singleInput) for one_model in modelset]
+        outmerge = keras.layers.Average()(outs)
+        merged_model = keras.Model(singleInput,outmerge)
+        merged_model.save(modelname)
+        self.ensemble_model_names[k] = modelname
+        self.ensemble_models[k] = merged_model
+        return self.ensemble_models[k]
+
+    def load_all_ensemble_models(self):
+        for k, model_name in enumerate(self.ensemble_model_names):
+            self.ensemble_models[k] = keras.models.load_model(model_name)
+        
     
-    def add_model(self, model, model_hist, kfold, lfold):
+    def add_model(self, model, model_hist, kfold, lfold, model_filename):
 
         train_data, valid_data, categories_train, categories_valid, weights_train, weights_valid = self.get_trainval_data(kfold,lfold)
 
@@ -171,6 +214,7 @@ class model_ensemble:
             lfold = lfold - 1
         self.models[kfold][lfold].append(model)
         self.model_hists[kfold][lfold].append(model_hist)
+        self.model_filenames[kfold][lfold].append(model_filename)
         
         model_pred_valid = model.predict(self.preprocess(valid_data),batch_size = self.batch_size).flatten()
         model_pred_train = model.predict(self.preprocess(train_data),batch_size = self.batch_size).flatten()
@@ -206,10 +250,13 @@ class model_ensemble:
         return [self.models[k][l][model_indices[l]] for l in range(self.kfolds-1)]
             
     def avg_model_predict_onek(self, data, k):
-        model_indices = np.array([0 for i in range(self.kfolds-1)])
-        for l in range(self.kfolds-1):
-            model_indices[l] = np.argmax(self.effs_valid[k][l])
-        to_return = np.average(np.array([self.models[k][l][index].predict(self.preprocess(data),batch_size=self.batch_size).flatten() for l, index in enumerate(model_indices)]),axis=0)
+        if self.ensemble_models[k] == None:
+            model_indices = np.array([0 for i in range(self.kfolds-1)])
+            for l in range(self.kfolds-1):
+                model_indices[l] = np.argmax(self.effs_valid[k][l])
+            to_return = np.average(np.array([self.models[k][l][index].predict(self.preprocess(data),batch_size=self.batch_size).flatten() for l, index in enumerate(model_indices)]),axis=0)
+        else:
+            to_return = self.ensemble_models[k].predict(self.preprocess(data),batch_size=self.batch_size).flatten()
         return to_return
 
     def avg_model_predict_lset(self, data, k):
@@ -265,7 +312,21 @@ class model_ensemble:
             predictions.append(self.avg_model_predict_onek(data[-1], k))
         AddPredictionsToScatter_nestedcrossval(data, predictions,axes_list=axes_list,axes_labels=axes_labels,
                                                rates=rates,colors=colors)
-    
+
+    def print_scatter_onemodel_signalregion(self,k,l,i,axes_list=[[0,1]],axes_labels=None,
+                                            rates = np.array([0.5,0.95,0.98,0.99]),
+                                            colors=['silver','grey','khaki','goldenrod','firebrick']):
+        if l > k:
+            l = l-1
+        data = self.get_kth_signalregion_data(k)
+        predictions = self.models[k][l][i].predict(self.preprocess(data)).flatten()
+        AddPredictionsToScatter(data, predictions,axes_list=axes_list,axes_labels=axes_labels,
+                                rates=rates,colors=colors)
+
+
+
+
+        
 #################################################################
 #######       AddPredictionsToScatter_nestedcrossval      #######
 #################################################################
@@ -509,6 +570,7 @@ class check_eff(keras.callbacks.Callback):
                     plt.plot(self.val_loss,color='C1')
                     plt.plot(self.loss,color='C0')
                     plt.grid(b=True)
+                    print("Saving fig:", self.filename[:-3] + "_losseffplots.png")
                     plt.savefig(self.filename[:-3] + "_losseffplots.png")
                     self.verbose = 0
                 self.model.stop_training = True
