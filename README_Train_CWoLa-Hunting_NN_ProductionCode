@@ -59,4 +59,4 @@ ARGUMENTS:
 
 In order to reproduce results similar to those in the paper, try:
 
-python Train_CWoLa-Hunting_NN_ProductionCode.py -o /output_directory/prefix -bgevnts 553388 -patience 300 -batchsize 2000 -sigevnts 900 -checkeff 0.005 -bin 7 -it 20
+python Train_CWoLa-Hunting_NN_ProductionCode.py -in /data_input_directory -o /output_directory/prefix -bgevnts 553388 -patience 300 -batchsize 2000 -sigevnts 900 -checkeff 0.005 -bin 7 -it 20

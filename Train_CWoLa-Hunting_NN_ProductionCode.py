@@ -180,10 +180,10 @@ def bin_data(data, binboundaries = mybinboundaries):
 #Load bg data
 print('\n')
 numfiles = int((myargs['-bgoffset'] + myargs['-bgevnts'])/100000) + 1
-print("Loading ", myargs['-in'] + 'new_dataset_0.dat')
-bgdata = np.loadtxt(myargs['-in'] + 'new_dataset_0.dat')
+print("Loading ", myargs['-in'] + 'bg_dataset_0.dat')
+bgdata = np.loadtxt(myargs['-in'] + 'bg_dataset_0.dat')
 for i in range(1,numfiles):
-    filename = myargs['-in'] + 'new_dataset_' + str(i) + '.dat'
+    filename = myargs['-in'] + 'bg_dataset_' + str(i) + '.dat'
     print("Loading ", filename)
     bgdata = np.append(bgdata,np.loadtxt(filename),axis=0)
 bgdata = bgdata[myargs['-bgoffset']:myargs['-bgoffset']+myargs['-bgevnts']]
@@ -194,7 +194,6 @@ rand.shuffle(bgdata)
 if myargs['-signal']:
     print('Adding signal data')
     signaldata = np.loadtxt(myargs['-in'] + 'W_WW_3000_400.dat')[:myargs['-sigevnts']]
-    signaldata = signaldata[:,1:]
     signaldata = signaldata[signaldata[:,0]>=mjjmin]
     bg_plus_signal = np.nan_to_num(np.append(signaldata,bgdata,axis=0))
     rand.shuffle(bg_plus_signal)
