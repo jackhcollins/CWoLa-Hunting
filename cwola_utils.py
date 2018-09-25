@@ -201,11 +201,13 @@ class model_ensemble:
         self.ensemble_models[k] = merged_model
         return self.ensemble_models[k]
 
-    def load_all_ensemble_models(self):
-        for k, model_name in enumerate(self.ensemble_model_names):
+    def load_all_ensemble_models(self, model_names = None):
+        if model_names == None:
+            model_names = self.ensemble_model_names
+        for k, model_name in enumerate(model_names):
             self.ensemble_models[k] = keras.models.load_model(model_name)
-        
-    
+
+            
     def add_model(self, model, model_hist, kfold, lfold, model_filename):
 
         train_data, valid_data, categories_train, categories_valid, weights_train, weights_valid = self.get_trainval_data(kfold,lfold)
@@ -350,7 +352,7 @@ def AddPredictionsToScatter(data, predictions,axes_list=[[0,1]],axes_labels=None
     points_list = np.array([data[sorted_args[int(extended_rates[i] * total_num):int(extended_rates[i+1] * total_num)]]
                             for i in range(0,len(extended_rates)-1)])
     
-    plt.figure(figsize=(7*len(axes_list),5))
+    plt.figure(figsize=(5*len(axes_list),5))
     size = 0.1
     for h, axes in enumerate(axes_list):
         plt.subplot(1, len(axes_list), h+1)
@@ -405,7 +407,7 @@ def AddPredictionsToScatter_nestedcrossval(data_set,
             points_list_init = True
     
     
-    plt.figure(figsize=(7*len(axes_list),5))
+    plt.figure(figsize=(5*len(axes_list),5))
     size = 0.1
     for h, axes in enumerate(axes_list):
         plt.subplot(1, len(axes_list), h+1)
@@ -454,7 +456,8 @@ class check_eff(keras.callbacks.Callback):
                  eff_rate=0.02,                    # Threshold used to evaluate performance metric
                  patience=70,                      # Epochs to wait since last performance increase
                  plot_period=1,                    # How frequently to plot performance metric
-                 batch_size=5000):                 # Batch size for NN prediction
+                 batch_size=5000,
+                 max_epochs=2000):                 # Batch size for NN prediction
         self.verbose = verbose
         self.filename = filename
         self.training_data = preprocessed_training_data
@@ -465,7 +468,8 @@ class check_eff(keras.callbacks.Callback):
         self.patience = patience
         self.plot_period=plot_period
         self.batch_size = batch_size
-            
+        self.max_epochs = max_epochs
+        
     def on_train_begin(self, logs={}):
         self.effs_val = []
         self.effs_val_avg = []
@@ -555,7 +559,7 @@ class check_eff(keras.callbacks.Callback):
                     plt.grid(b=True)
 
             # If we have waited too long with no improvement, halt training.
-            if (self.patience > 0) & (self.n_wait > self.patience):
+            if ((self.patience > 0) & (self.n_wait > self.patience)) or (epoch == self.max_epochs-1):
                 if self.verbose > -1:
                     plt.close('all')
                     plt.figure(figsize=(14,5))
@@ -650,7 +654,7 @@ from numpy.linalg import inv
 ###################       get_p_value      ######################
 #################################################################
 
-def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
+def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None,return_teststat = False):
     
     ydata = np.array(ydata)
     #Assume poisson is gaussian with N+1 variance
@@ -673,7 +677,10 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     yerr = np.array(yerr)*100/ np.array(xwidths)
     
     #Least square fit, masking out the signal region
-    popt, pcov = curve_fit(fit_func, np.delete(xdata,mask), np.delete(ydata,mask),sigma=np.delete(yerr,mask),maxfev=3000)
+    if len(mask) > 0:
+        popt, pcov = curve_fit(fit_func, np.delete(xdata,mask), np.delete(ydata,mask),sigma=np.delete(yerr,mask),maxfev=3000,absolute_sigma=True)
+    else:
+        popt, pcov = curve_fit(fit_func, xdata, ydata, sigma=yerr,maxfev=3000)
     if verbose:
         print('fit params: ', popt)
         print('\n')
@@ -682,10 +689,16 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     
     #Check that the function is a good fit to the sideband
     if verbose > 0:
-        residuals = np.delete((ydata - ydata_fit)/yerr,mask)
+        if len(mask) > 0:
+            residuals = np.delete((ydata - ydata_fit)/yerr,mask)
+        else:
+            residuals = np.delete((ydata - ydata_fit)/yerr,mask)
         print("Goodness: ",kstest(residuals, norm(loc=0,scale=1).cdf))
         print('\n')
-        
+    
+    if len(mask) == 0:
+        pass
+    
     #The following code is used to get the bin errors by propagating the errors on the fit params
     def fit_func_array(parr):
         #see the ATLAS diboson resonance search: https://arxiv.org/pdf/1708.04445.pdf.
@@ -709,6 +722,11 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     #Now, let's compute some statistics.
     #  Will use asymptotic formulae for p0 from Cowan et al arXiv:1007.1727
     #  and systematics procedure from https://cds.cern.ch/record/2242860/files/NOTE2017_001.pdf
+
+    # Note that in an eariler of this code, we were doing a 3-bin signal region shape fit.
+    # We shifted to doing a single counting experiment, adding the three signal region bins together into a scalar value.
+    # As a result of this shift, some scalars are confusingly represented as 1-dim arrays. It was
+    # the quickest way to make the new code work without accidentally breaking something.
     
     #First get systematics in the signal region
     
@@ -717,7 +735,7 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
         #see the ATLAS diboson resonance search: https://arxiv.org/pdf/1708.04445.pdf.
         p1, p2, p3 = parr
         xi = 0.
-        return np.array([p1*(1.-(x/13000.))**(p2-xi*p3)*(x/13000.)**-p3 for x in xdata[mask]])
+        return np.array([np.sum([p1*(1.-(x/13000.))**(p2-xi*p3)*(x/13000.)**-p3*xwidths[mask[i]]/100 for i, x in enumerate(xdata[mask])])])
     #Get covariance matrix of prediction uncertainties in the signal region
     jac=numdifftools.core.Jacobian(signal_fit_func_array)
     x_signal_cov=np.dot(np.dot(jac(popt),pcov),jac(popt).T)
@@ -725,8 +743,8 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     inv_x_signal_cov = inv(x_signal_cov)
     
     #Get observed and predicted event counts in the signal region
-    obs = np.array(ydata)[mask]*np.array(xwidths)[mask]/100
-    expected = np.array([fit_func(xdata[targetbin],popt[0],popt[1],popt[2])*xwidths[targetbin]/100 for targetbin in mask])
+    obs = np.array([np.sum(np.array(ydata)[mask]*np.array(xwidths)[mask]/100)])
+    expected = np.array([np.sum([fit_func(xdata[targetbin],popt[0],popt[1],popt[2])*xwidths[targetbin]/100 for targetbin in mask])])
     
     #Negative numerator of log likelihood ratio, for signal rate mu = 0
     def min_log_numerator(expected_nuis_arr):
@@ -737,7 +755,7 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
         #Poisson terms
         for i, expected_nuis in enumerate(expected_nuis_arr):
             #Poisson lambda. Have to rescale nuisance constribution by bin width
-            my_lambda = expected[i]+expected_nuis_arr[i]*xwidths[mask][i]/100
+            my_lambda = expected[i]+expected_nuis_arr[i]
             #Prevent negative predicted rates
             if my_lambda < 10**-10:
                 my_lambda = 10**-10
@@ -753,11 +771,11 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
         #expected_nuis_arr is the array of systematic background uncertainty nuisance parameters
         #These are event rate densities
         expected_nuis_arr = np.array(expected_nuis_arr)
-        to_return = np.array([0.,0.,0.])
+        to_return = np.array([0.])
         #Poisson terms
         #Poisson lambda. Have to rescale nuisance constribution by bin width
-        my_lambda = expected+expected_nuis_arr*xwidths[mask]/100
-        dmy_lambda = xwidths[mask]/100
+        my_lambda = expected+expected_nuis_arr
+        dmy_lambda = np.array([1.])
         #Prevent negative predicted rates
         my_lambda[my_lambda < 10**-10] = np.ones(len(my_lambda[my_lambda < 10**-10])) * 10**-10
         dmy_lambda[my_lambda < 10**-10] = 0
@@ -769,16 +787,17 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
         return -to_return
     
     #Initialization of nuisance params
-    expected_nuis_array_init = [0.01,-0.01,0.02]
+    expected_nuis_array_init = [0.02]
     
     #shift log likelihood to heklp minimization algo
     def rescaled_min_log_numerator(expected_nuis_arr):
         return min_log_numerator(expected_nuis_arr) - min_log_numerator(expected_nuis_array_init)
     
     #Perform minimization over nuisance parameters. Set bounds for bg nuisance at around 8 sigma.
-    bnds=((-8*y_unc[mask[0]],8*y_unc[mask[0]]),(-8*y_unc[mask[1]],8*y_unc[mask[1]]),(-8*y_unc[mask[2]],8*y_unc[mask[2]]))
-    minimize_log_numerator = minimize(rescaled_min_log_numerator,expected_nuis_array_init,
-                                      jac=jac_min_log_numerator,
+    bnds=[[-8*y_unc[mask[0]],8*y_unc[mask[0]]]]
+    minimize_log_numerator = minimize(rescaled_min_log_numerator,
+                                      expected_nuis_array_init,
+                                      #jac=jac_min_log_numerator,
                                       bounds=bnds)
     
     if verbose:
@@ -787,18 +806,16 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     #Now get likelihood ratio denominator
     def min_log_denom(nuis_arr):
         #nuis_arr contains the bg systematics and also the signal rate
-        expected_nuis_arr = np.array(nuis_arr)[:3]
+        expected_nuis_arr = np.array(nuis_arr)[:1]
         #print(expected_nuis_arr)
-        f1 = nuis_arr[3]
-        f2 = nuis_arr[4]
-        mu = nuis_arr[5]
+        mu = nuis_arr[1]
         #Signal prediction
-        pred = [f1*mu,f2*(1-f1)*mu,(1-f1-f2*(1-f1))*mu]
+        pred = [mu]
         to_return = 0
         #Poisson terms
         for i, expected_nuis in enumerate(expected_nuis_arr):
             #Poisson lambda
-            my_lambda = expected[i]+expected_nuis_arr[i]*xwidths[mask][i]/100+pred[i]
+            my_lambda = expected[i]+expected_nuis_arr[i] + pred[i]
             #Prevent prediction from going negative
             if my_lambda < 10**-10:
                 my_lambda = 10**-10
@@ -813,16 +830,14 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     def jac_min_log_denom(nuis_arr):
         #expected_nuis_arr is the array of systematic background uncertainty nuisance parameters
         #These are event rate densities
-        expected_nuis_arr = np.array(nuis_arr)[:3]
-        f1 = nuis_arr[3]
-        f2 = nuis_arr[4]
-        mu = nuis_arr[5]
-        pred = [f1*mu,f2*(1-f1)*mu,(1-f1-f2*(1-f1))*mu]
-        to_return_first = np.array([0.,0.,0.])
+        expected_nuis_arr = np.array(nuis_arr)[:1]
+        mu = nuis_arr[1]
+        pred = [mu]
+        to_return_first = np.array([0.])
         #Poisson terms
         #Poisson lambda. Have to rescale nuisance constribution by bin width
-        my_lambda = expected+expected_nuis_arr*xwidths[mask]/100+pred
-        dmy_lambda = xwidths[mask]/100
+        my_lambda = expected+expected_nuis_arr+pred
+        dmy_lambda = np.array([1.])
         #Prevent prediction from going negative
         my_lambda[my_lambda < 10**-10] = np.ones(len(my_lambda[my_lambda < 10**-10])) * 10**-10
         dmy_lambda[my_lambda < 10**-10] = 0
@@ -832,42 +847,46 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
         nuisance_term = -np.dot(inv_x_signal_cov,expected_nuis_arr)
         to_return_first = to_return_first + nuisance_term
         
-        to_return_last = np.array([0.,0.,0.])
+        to_return_last = np.array([0.])
         
-        dpred = np.array([[mu,-f2*mu,(-1+f2)*mu],
-                          [0,(1-f1)*mu,(-1+f1)*mu],
-                          [f1,f2*(1-f1),1-f1-f2*(1-f1)]])
+        dpred = np.array([[1.]])
         
-        my_lambda = expected+expected_nuis_arr*xwidths[mask]/100+pred
+        my_lambda = expected+expected_nuis_arr+pred
         dmy_lambda = dpred
         to_return_last = np.dot((obs/my_lambda),dmy_lambda.T) - np.sum(dmy_lambda,axis=1)
         
         return -np.append(to_return_first, to_return_last)
     
     #initizalization for minimization
-    nuis_array_init = [0.01,0.02,0.01,0.33,0.5,1]
+    nuis_array_init = [0.01,1.]
     
     #Shift log likelihood for helping minimization algo.
     def rescaled_min_log_denom(nuis_arr):
         return min_log_denom(nuis_arr) - min_log_denom(nuis_array_init)
     
-    bnds = ((None,None),(None,None),(None,None),(0,1),(0,1),(None,None))
-    minimize_log_denominator = minimize(rescaled_min_log_denom,nuis_array_init,bounds=bnds,
-                                        jac=jac_min_log_denom)
+    bnds = ((None,None),(None,None))
+    minimize_log_denominator = minimize(rescaled_min_log_denom,nuis_array_init,
+                                        #jac=jac_min_log_denom,
+                                        bounds=bnds)
     
     if verbose:
         print("Denominator: ",  minimize_log_denominator.items(),'\n')
         
     if minimize_log_denominator.x[-1] < 0:
         Zval = 0
+        neglognum = 0
+        neglogden = 0
     else:
         neglognum = min_log_numerator(minimize_log_numerator.x)
         neglogden = min_log_denom(minimize_log_denominator.x)
         Zval = np.sqrt(2*(neglognum - neglogden))
-        
-    print("z = ", Zval)
+      
+    
     p0 = 1-norm.cdf(Zval)
-    print("p0 = ", p0)
+    
+    if verbose:
+        print("z = ", Zval)
+        print("p0 = ", p0)
 
     plt.title(str(p0))
     if plotfile == 'show':
@@ -875,6 +894,8 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None):
     elif plotfile:
         plt.savefig(plotfile)
 
-    return p0
+    if return_teststat:
+        return p0, 2*(neglognum - neglogden)
+    else:
+        return p0
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
