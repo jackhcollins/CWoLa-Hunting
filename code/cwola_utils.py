@@ -90,6 +90,15 @@ class model_ensemble:
                                     binned_data[self.bin_i+1]),
                                    axis=0)
         return to_return
+
+    def get_kth_sidebandregion_data(self,k):
+        binned_data = self.dataset_split[k]
+        to_return = np.concatenate((binned_data[self.bin_i-3],
+                                    binned_data[self.bin_i-2],
+                                    binned_data[self.bin_i+2],
+                                    binned_data[self.bin_i+3]),
+                                   axis=0)
+        return to_return
     
     def get_trainval_data(self,k,l):
 
