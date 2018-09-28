@@ -334,7 +334,18 @@ class model_ensemble:
         AddPredictionsToScatter(data, predictions,axes_list=axes_list,axes_labels=axes_labels,
                                 rates=rates,colors=colors)
 
+    def get_thresh_individual(self, k, eff = None):
+        if eff is None:
+            eff = self.eff_for_thresh
+        binned_predictions = [self.avg_model_predict_onek(data_bin,k).flatten() for data_bin in self.dataset_split[k]]
+        concat_predictions = binned_predictions[0]
+        for bin_no in range(1,len(binned_predictions)):
+            concat_predictions = np.append(concat_predictions,binned_predictions[bin_no])
+        concat_predictions = np.sort(1-concat_predictions)
+        return 1-concat_predictions[min(int(eff*len(concat_predictions)),len(concat_predictions)-1)]
 
+    def get_thresh_all(self, eff = None):
+        return np.array([get_thresh_individual(k, eff) for k in range(self.kfolds)])
 
 
         
