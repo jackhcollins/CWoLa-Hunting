@@ -765,10 +765,12 @@ def get_p_value(ydata,binvals,mask=[],verbose=0,plotfile=None,yerr=None,return_t
     y_unc=np.sqrt([row[i] for i, row in enumerate(x_cov)])
     
     if plotfile:
-        plt.fill_between(xdata,ydata_fit+y_unc,ydata_fit-y_unc,color='gray',alpha=0.4)
+        lower_bound = ydata_fit-y_unc
+        lower_bound[lower_bound<10**-4] = 10**-4
+        plt.fill_between(xdata,ydata_fit+y_unc,lower_bound,color='gray',alpha=0.4)
         plt.errorbar(xdata, ydata,yerr,None, 'bo', label='data',markersize=4)
         plt.plot(xdata, ydata_fit, 'r--', label='data')
-        plt.semilogy()
+        plt.gca().set_yscale("log", nonposy='clip')
         plt.ylabel('Num events / 100 GeV')
         plt.xlabel('mJJ / GeV')
         
