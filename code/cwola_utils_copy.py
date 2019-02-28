@@ -535,7 +535,7 @@ class check_eff(keras.callbacks.Callback):
         if avg_length%2 == 0:
             avg_length = avg_length+1
         self.avg_length = avg_length
-        self.temp_weights = [None for i in range(round((self.avg_length-1)/2+1))]
+        self.temp_weights = [None for i in range(int(round((self.avg_length-1)/2+1)))]
         self.training_data = preprocessed_training_data
         self.period = period
         self.min_epoch = min_epoch
