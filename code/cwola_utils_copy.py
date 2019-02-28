@@ -551,7 +551,7 @@ class check_eff(keras.callbacks.Callback):
         n = self.avg_length
         ret = np.cumsum(a, dtype=float)
         ret[n:] = ret[n:] - ret[:-n]
-        return np.append(np.ones(round((n-1)/2))*(ret[n - 1] / n),ret[n - 1:] / n)
+        return np.append(np.ones(int(round((n-1)/2)))*(ret[n - 1] / n),ret[n - 1:] / n)
     
     def on_train_begin(self, logs={}):
         self.effs_val = []
