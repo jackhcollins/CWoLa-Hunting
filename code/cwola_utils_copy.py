@@ -386,9 +386,30 @@ class model_ensemble:
         return np.array([self.get_thresh_individual(k, eff) for k in range(self.kfolds)])
 
 
+    
+#################################################################
+##############       get_thresholds      ###############
+#################################################################
+    
+def get_thresholds(predictions, rates, accuracy = 10**-1):
+    
+    num_desired = int((1/accuracy)**2/(1-rates[-1]))
+    if num_desired > len(predictions):
+        np.random.shuffle(predictions)
+        predictions = predictions[:num_desired]
+            
+    extended_rates = np.insert(rates,0,0.0)
+    extended_rates = np.append(extended_rates,1.0)
+    
+    sorted_predictions = np.sort(predictions)
+    threshold_indices = [max(int(rate*len(predictions))-1,0) for rate in extended_rates]
+    thresholds = [sorted_predictions[int(index)] for index in threshold_indices]
+    
+    return thresholds
+    
         
 #################################################################
-#######       AddPredictionsToScatter_nestedcrossval      #######
+##############       AddPredictionsToScatter      ###############
 #################################################################
 """
 Creates scatter plots of all events in selected planes,
@@ -399,8 +420,8 @@ highlighting those events passing thresholds on NN output.
 def AddPredictionsToScatter(data, predictions,axes_list=[[0,1]],axes_labels=None,
                             rates = np.array([0.5,0.95,0.98,0.99]),
                             colors=['silver','grey','khaki','goldenrod','firebrick'],
-                           threshold_predictions = None,
-                           plotmode="show"):
+                            threshold_predictions = None,
+                            plotmode="show"):
     
     if threshold_predictions is None:
         threshold_predictions = predictions
@@ -408,12 +429,14 @@ def AddPredictionsToScatter(data, predictions,axes_list=[[0,1]],axes_labels=None
     if axes_labels == None:
         axes_labels = [[None,None] for axes in axes_list]
         
-    extended_rates = np.insert(rates,0,0.0)
-    extended_rates = np.append(extended_rates,1.0)
+#     extended_rates = np.insert(rates,0,0.0)
+#     extended_rates = np.append(extended_rates,1.0)
     
-    sorted_threshold_predictions = np.sort(threshold_predictions)
-    threshold_indices = [max(int(rate*len(threshold_predictions))-1,0) for rate in extended_rates]
-    thresholds = [sorted_threshold_predictions[int(index)] for index in threshold_indices]
+#     sorted_threshold_predictions = np.sort(threshold_predictions)
+#     threshold_indices = [max(int(rate*len(threshold_predictions))-1,0) for rate in extended_rates]
+#     thresholds = [sorted_threshold_predictions[int(index)] for index in threshold_indices]
+
+    thresholds = get_thresholds(threshold_predictions,rates)
     
     points_list = np.array([data[(predictions > thresholds[i])*(predictions < thresholds[i+1])] for i in range(len(thresholds)-1)])
     
@@ -438,6 +461,10 @@ def AddPredictionsToScatter(data, predictions,axes_list=[[0,1]],axes_labels=None
         plt.show()
                 
     return [rates]
+
+
+
+
 
 
 #################################################################
@@ -529,7 +556,7 @@ class check_eff(keras.callbacks.Callback):
                  plot_period=1,                    # How frequently to plot performance metric
                  batch_size=5000,                  # Batch size for NN prediction
                  max_epochs=2000,
-                plotmode="save"):                 
+                 plotmode="save"):                 
         self.verbose = verbose
         self.filename = filename
         if avg_length%2 == 0:
@@ -771,6 +798,65 @@ class print_scatter_checkpoint(keras.callbacks.Callback):
                 plt.savefig(self.filename + '_' + str(epoch) + '.png')
             else:
                 plt.show()
+                
+                
+                
+#################################################################
+##############       print_mjj_spectrum      ####################
+#################################################################
+"""
+This class is a Keras custom callback which will mjj distributions
+of the NN selection.
+"""
+#################################################################
+
+class print_mjj_spectrum(keras.callbacks.Callback):
+
+    def __init__(self,
+                 dataset,
+                 bincenters,
+                 period=100,
+                 preprocess = None,
+                 rates = np.array([0.5,0.95,0.99,0.998]),
+                 mode = "show",
+                 filename = "tmp",
+                 batch_size = 2000):
+        self.dataset = dataset
+        self.preprocess = preprocess
+        self.rates=rates
+        self.period=100
+        self.numdata = np.sum([len(data) for data in dataset])
+        self.bincenters = bincenters
+        self.mode = mode
+        self.filename = filename
+        self.batch_size = batch_size
+
+    def on_train_begin(self, logs={}):
+        self.effs_val = []
+            
+    def on_epoch_end(self, epoch, logs={}):
+        if epoch%self.period == 0:
+            
+            predictions_binned = [self.model.predict(self.preprocess(data),batch_size=self.batch_size).flatten() for data in self.dataset]
+            predictions_concat = np.concatenate(predictions_binned, axis=0)           
+            thresholds = get_thresholds(predictions_concat,self.rates)[:-1]
+            
+            bincounts = [[np.sum(predictions_bin > threshold) for predictions_bin in predictions_binned] for threshold in thresholds]
+            
+            
+            for i, counts in enumerate(bincounts):
+                plt.errorbar(self.bincenters, counts,np.sqrt(np.array(counts)+1),None, 'bo', markersize=4)
+            plt.gca().set_yscale("log", nonposy='clip')
+            plt.ylabel('Num events / bin')
+            plt.xlabel('mJJ / GeV')
+            plt.tight_layout()
+            
+            if self.mode == "save":
+                plt.savefig(self.filename + '_' + str(epoch) + '.png')
+            else:
+                plt.show()
+               
+            
 
 from scipy.optimize import minimize
 from scipy.optimize import curve_fit
