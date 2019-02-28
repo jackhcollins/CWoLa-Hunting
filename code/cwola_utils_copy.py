@@ -330,9 +330,47 @@ class model_ensemble:
         if l > k:
             l = l-1
         data = self.get_kth_signalregion_data(k)
+        sideband_data = self.get_kth_sidebandregion_data(k)
+        
         predictions = self.models[k][l][i].predict(self.preprocess(data)).flatten()
+        predictions_sideband = self.models[k][l][i].predict(self.preprocess(sideband_data)).flatten()
+        
         AddPredictionsToScatter(data, predictions,axes_list=axes_list,axes_labels=axes_labels,
-                                rates=rates,colors=colors)
+                                rates=rates,colors=colors,threshold_predictions = predictions_sideband)
+    
+    
+    def print_scatter_avg_onek_signalplussidebandregion(self,k,axes_list=[[0,1]],axes_labels=None,
+                                            rates = np.array([0.5,0.95,0.98,0.99]),
+                                            colors=['silver','grey','khaki','goldenrod','firebrick']):
+        
+        data = self.get_kth_signalregion_data(k)
+        sideband_data = self.get_kth_sidebandregion_data(k)
+        
+        predictions = self.avg_model_predict_onek(data, k)
+        predictions_sideband = self.avg_model_predict_onek(sideband_data, k)
+        
+        AddPredictionsToScatter(data, predictions,
+                                axes_list=axes_list,axes_labels=axes_labels,
+                                rates=rates,colors=colors,
+                                threshold_predictions = predictions_sideband)
+    
+    
+    def print_scatter_onemodel_signalplussidebandregion(self,k,l,i,axes_list=[[0,1]],axes_labels=None,
+                                            rates = np.array([0.5,0.95,0.98,0.99]),
+                                            colors=['silver','grey','khaki','goldenrod','firebrick']):
+        if l > k:
+            l = l-1
+        data = self.get_kth_signalregion_data(k)
+        sideband_data = self.get_kth_sidebandregion_data(k)
+        
+        predictions = self.models[k][l][i].predict(self.preprocess(data)).flatten()
+        predictions_sideband = self.models[k][l][i].predict(self.preprocess(sideband_data)).flatten()
+        
+        AddPredictionsToScatter(np.append(data,sideband_data,axis=0),
+                                np.append(predictions,predictions_sideband,axis=0),
+                                axes_list=axes_list,axes_labels=axes_labels,
+                                rates=rates,colors=colors,
+                                threshold_predictions = predictions_sideband)
 
     def get_thresh_individual(self, k, eff = None):
         if eff is None:
@@ -360,17 +398,29 @@ highlighting those events passing thresholds on NN output.
 
 def AddPredictionsToScatter(data, predictions,axes_list=[[0,1]],axes_labels=None,
                             rates = np.array([0.5,0.95,0.98,0.99]),
-                            colors=['silver','grey','khaki','goldenrod','firebrick']):
+                            colors=['silver','grey','khaki','goldenrod','firebrick'],
+                           threshold_predictions = None,
+                           plotmode="show"):
+    
+    if threshold_predictions is None:
+        threshold_predictions = predictions
 
     if axes_labels == None:
         axes_labels = [[None,None] for axes in axes_list]
         
     extended_rates = np.insert(rates,0,0.0)
     extended_rates = np.append(extended_rates,1.0)
-    sorted_args = np.argsort(predictions)
-    total_num = len(sorted_args)
-    points_list = np.array([data[sorted_args[int(extended_rates[i] * total_num):int(extended_rates[i+1] * total_num)]]
-                            for i in range(0,len(extended_rates)-1)])
+    
+    sorted_threshold_predictions = np.sort(threshold_predictions)
+    threshold_indices = [max(int(rate*len(threshold_predictions))-1,0) for rate in extended_rates]
+    thresholds = [sorted_threshold_predictions[int(index)] for index in threshold_indices]
+    
+    points_list = np.array([data[(predictions > thresholds[i])*(predictions < thresholds[i+1])] for i in range(len(thresholds)-1)])
+    
+#     sorted_args = np.argsort(predictions)
+#     total_num = len(sorted_args)
+#     points_list = np.array([data[sorted_args[int(extended_rates[i] * total_num):int(extended_rates[i+1] * total_num)]]
+#                             for i in range(0,len(extended_rates)-1)])
     
     plt.figure(figsize=(5*len(axes_list),5))
     size = 0.1
@@ -384,7 +434,8 @@ def AddPredictionsToScatter(data, predictions,axes_list=[[0,1]],axes_labels=None
                 size = 1.0
             plt.scatter(points[:,axes[0]],points[:,axes[1]],
                         s=size, color=colors[i])
-    plt.show()
+    if plotmode == "show":
+        plt.show()
                 
     return [rates]
 
@@ -471,7 +522,7 @@ class check_eff(keras.callbacks.Callback):
                  preprocessed_training_data=[],
                  period=1,                         # Epoch-frequency for checking performance
                  min_epoch=10,                     # Wait this no of epochs before saving best model
-                 avg_length=5,                     # Period for plotting moving average of performance metric
+                 avg_length=20,                     # Period for plotting moving average of performance metric
                  preprocessor = None,              # Preprocessor for data before feeding to NN
                  eff_rate=0.02,                    # Threshold used to evaluate performance metric
                  patience=70,                      # Epochs to wait since last performance increase
@@ -481,17 +532,27 @@ class check_eff(keras.callbacks.Callback):
                 plotmode="save"):                 
         self.verbose = verbose
         self.filename = filename
+        if avg_length%2 == 0:
+            avg_length = avg_length+1
+        self.avg_length = avg_length
+        self.temp_weights = [None for i in range(round((self.avg_length-1)/2+1))]
         self.training_data = preprocessed_training_data
         self.period = period
         self.min_epoch = min_epoch
-        self.avg_length=avg_length
+
         self.eff_rate = eff_rate
         self.patience = patience
         self.plot_period=plot_period
         self.batch_size = batch_size
         self.max_epochs = max_epochs
         self.plotmode = plotmode
-        
+    
+    def moving_average(self, a):
+        n = self.avg_length
+        ret = np.cumsum(a, dtype=float)
+        ret[n:] = ret[n:] - ret[:-n]
+        return np.append(np.ones(round((n-1)/2))*(ret[n - 1] / n),ret[n - 1:] / n)
+    
     def on_train_begin(self, logs={}):
         self.effs_val = []
         self.effs_val_avg = []
@@ -500,12 +561,17 @@ class check_eff(keras.callbacks.Callback):
         self.loss = []
         self.val_loss = []
         self.n_wait = 0
+
         
     def on_epoch_end(self, epoch, logs={}):
         self.loss.append(logs['loss'])
         self.val_loss.append(logs['val_loss'])
 
         if epoch%self.period==0:
+            
+            del self.temp_weights[0]
+            self.temp_weights.append(self.model.get_weights())
+            
             data = self.validation_data[0]
             my_pred = self.model.predict(data,batch_size=self.batch_size).flatten()
             my_true = self.validation_data[1].flatten()
@@ -527,27 +593,30 @@ class check_eff(keras.callbacks.Callback):
                 
             if len(self.effs_val) == 0:
                 self.model.save(self.filename)
-            # If this model is the best so far, save the model and reset the patience timer.
-            elif len(self.effs_val) > self.min_epoch:
-                if (sig_eff >= np.array(self.effs_val)[self.min_epoch:].max()):
-                    self.model.save(self.filename)
-                    self.n_wait = 0
+
 
             self.effs_val.append(sig_eff)
-            if(len(self.effs_val) <= self.avg_length):
-                self.effs_val_avg.append(np.mean(self.effs_val))
-            else:
-                self.effs_val_avg.append(np.mean(np.array(self.effs_val)[-self.avg_length:]))
+            if(len(self.effs_val) >= self.avg_length):
+                self.effs_val_avg = self.moving_average(self.effs_val)
+                
+            # If this model is the best so far, save the model and reset the patience timer.
+            if len(self.effs_val) > self.min_epoch and len(self.effs_val_avg)>self.min_epoch+1:
+                if (self.effs_val_avg[-1] > self.effs_val_avg[self.min_epoch:-1].max()):
+                    self.model.set_weights(self.temp_weights[0])
+                    self.model.save(self.filename)
+                    self.model.set_weights(self.temp_weights[-1])
+                    self.n_wait = 0
                
-            if(self.verbose):
+            if(self.verbose>1):
                 print("sig eff = ", sig_eff)
 
-            if (self.verbose > 1) & (epoch % self.plot_period == 0):
+                
+            if (self.verbose > 0) & (epoch % self.plot_period == 0):
                 plt.figure(figsize=(14,5))
                 plt.subplot(1, 2, 1)
-                plt.plot(self.effs_val,color='C1')
-                if(self.avg_length > 1):
-                    plt.plot(self.effs_val_avg,color='C1',linestyle='--')
+                plt.plot(self.effs_val,color='C0',linestyle='--',alpha=0.5)
+                if len(self.effs_val_avg) > 0:
+                    plt.plot(self.moving_average(self.effs_val),color='C0',linestyle='-')
 
             if len(self.training_data) > 0:
                 data = self.training_data[0]
@@ -574,9 +643,9 @@ class check_eff(keras.callbacks.Callback):
                 if(self.verbose):
                     print("sig eff train = ", sig_eff)
                     
-                if (self.verbose > 1) & (epoch % self.plot_period == 0):
+                if (self.verbose > 0) & (epoch % self.plot_period == 0) & epoch>0:
                     plt.plot(self.effs_train,color='C0')
-                    if(self.avg_length > 1):
+                    if (self.avg_length > 1) and (len(self.effs_train) >= self.avg_length):
                         plt.plot(self.effs_train_avg,color='C0',linestyle='--')
                     plt.grid(b=True)
 
@@ -586,16 +655,21 @@ class check_eff(keras.callbacks.Callback):
                     plt.close('all')
                     plt.figure(figsize=(14,5))
                     plt.subplot(1, 2, 1)
-                    plt.plot(self.effs_val,color='C1')
-                    plt.plot(self.effs_train,color='C0')
+                    plt.plot(self.effs_val,color='C0',linestyle='--',alpha=0.5)
+                    plt.plot(self.effs_train,color='C1',linestyle='--',alpha=0.5)
                     if(self.avg_length > 1):
-                        plt.plot(self.effs_val_avg,color='C1',linestyle='--')
-                        plt.plot(self.effs_train_avg,color='C0',linestyle='--')
+                        plt.plot(self.effs_val_avg,color='C0')
+                        plt.plot(self.effs_train_avg,color='C1')
                     plt.grid(b=True)
+                    plt.xlabel('Epoch')
+                    plt.ylabel('Sig. reg. eff at fixed sideband eff')
                     plt.subplot(1, 2, 2)
-                    plt.plot(self.val_loss,color='C1')
-                    plt.plot(self.loss,color='C0')
+                    plt.xlabel('Epoch')
+                    plt.ylabel('Loss')
+                    plt.plot(self.val_loss,color='C0')
+                    plt.plot(self.loss,color='C1')
                     plt.grid(b=True)
+                    plt.tight_layout()
                     if self.plotmode == "save":
                         print("Saving fig:", self.filename[:-3] + "_losseffplots.png")
                         plt.savefig(self.filename[:-3] + "_losseffplots.png")
@@ -606,15 +680,22 @@ class check_eff(keras.callbacks.Callback):
 
 
                 
-        if (self.verbose > 1) & (epoch % self.plot_period == 0):
-            plt.subplot(1, 2, 2)
-            plt.plot(self.val_loss,color='C1')
-            plt.plot(self.loss,color='C0')
+        if (self.verbose > 0) & (epoch % self.plot_period == 0) & (epoch > 0):
             plt.grid(b=True)
+            plt.xlabel('Epoch')
+            plt.ylabel('Sig. reg. eff at fixed sideband eff')
+            plt.subplot(1, 2, 2)
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.plot(self.val_loss,color='C0')
+            plt.plot(self.loss,color='C1')
+            plt.grid(b=True)
+            plt.tight_layout()
             if self.plotmode == "save":
                 plt.savefig(self.filename[:-3] + "_losseffplots.png")
             else:
                 plt.show()
+
 
 
 
@@ -638,16 +719,18 @@ class print_scatter_checkpoint(keras.callbacks.Callback):
                  period=5,
                  batch_size = 5000,
                  training_data=[],
+                 training_labels=[],
                  preprocess = None,
                  mode="print",
                  fig=None,
                  rates = np.array([0.5,0.95,0.99,0.998]),
                  colors=['silver','grey','khaki','goldenrod','firebrick']):
-        self.verbose=verbose
-        self.filename=filename
+        self.verbose = verbose
+        self.filename = filename
         self.axes_list = axes_list
         self.period = period
-        self.training_data=training_data
+        self.training_data = training_data
+        self.training_labels = training_labels
         self.mode=mode
         def null_preprocess(data):
             return data
@@ -668,23 +751,26 @@ class print_scatter_checkpoint(keras.callbacks.Callback):
         if epoch%self.period == 0:
             if len(self.training_data) > 0:
                 data = self.training_data
+                truth = self.training_labels
             else:
                 data = self.validation_data[0]
-
+                truth = self.validation_data[1].flatten()
+                
+            
+            
             predictions = self.model.predict(self.preprocess(data),batch_size=self.batch_size).flatten()
+            predictions_sideband = self.model.predict(self.preprocess(data[truth < 0.5]),batch_size=self.batch_size).flatten()
             
             plt.close('all')
-            AddPredictionsToScatter(data, predictions,axes_list=self.axes_list,axes_labels=self.axes_labels,
-                                   rates=self.rates,
-                                   colors=self.colors)
-            #plt.title(epoch)
+            AddPredictionsToScatter(data, predictions,
+                                    axes_list=self.axes_list,axes_labels=self.axes_labels,
+                                    threshold_predictions = predictions_sideband,
+                                   rates=self.rates, colors=self.colors,plotmode=None)
+            plt.title("Epoch = " + str(epoch))
             if self.mode == "print":
                 plt.savefig(self.filename + '_' + str(epoch) + '.png')
             else:
-                self.fig.gca().clear()
                 plt.show()
-                self.fig.canvas.flush_events() 
-
 
 from scipy.optimize import minimize
 from scipy.optimize import curve_fit
