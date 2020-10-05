@@ -185,8 +185,8 @@ selected_vars = [1,4,2,5,3,6]
 selected_vars_plus = np.append([0],selected_vars)
 
 #Which 2d planes to make scatter plots in
-axes_list = [[1,2],[3,4],[5,6]]
-axes_labels = [['mJA','mJB'],['tau_21A','tau21B'],['tau_32A','tau32B']]
+axes_list = [[1,4],[2,5],[3,6]]
+axes_labels = [['px1','px2'],['py1','py2'],['pz1','pz2']]
 
 #Data binning in mJJ
 mjjmin = 2800
@@ -298,12 +298,15 @@ if (not myargs['-loadonly']):
             data_train, data_valid, labels_train, labels_valid, weights_train, weights_valid = model_utils[bin_i].get_trainval_data(k,l)
             data_train_bg, data_valid_bg, labels_train_bg, labels_valid_bg, weights_train_bg, weights_valid_bg = model_utils_bg[bin_i].get_trainval_data(k,l)
 
-            data_train_all = np.concatenate((data_train,data_train_bg),axis=-1)
-            data_valid_all = np.concatenate((data_valid,data_valid_bg),axis=-1)
-            labels_train_all = np.concatenate((labels_train,labels_train_bg),axis=-1)
-            labels_valid_all = np.concatenate((labels_valid,labels_valid_bg),axis=-1)
-            weights_train_all = np.concatenate((weights_train,-myargs['-lambda']*weights_train_bg),axis=-1)
-            weights_valid_all = np.concatenate((weights_valid,-myargs['-lambda']*weights_valid_bg),axis=-1)
+            data_train_all = np.concatenate((data_train,data_train_bg),axis=0)
+            data_valid_all = np.concatenate((data_valid,data_valid_bg),axis=0)
+            labels_train_all = np.concatenate((labels_train,labels_train_bg),axis=0)
+            labels_valid_all = np.concatenate((labels_valid,labels_valid_bg),axis=0)
+            ratio = np.sum(weights_train)/np.sum(weights_train_bg)
+            weights_train_all = np.concatenate((weights_train,-myargs['-lambda']*ratio*weights_train_bg),axis=0)
+            weights_valid_all = np.concatenate((weights_valid,-myargs['-lambda']*ratio*weights_valid_bg),axis=0)
+            # print("bg weights:",np.sum(-myargs['-lambda']*weights_train_bg))
+            # print("sig weights:",np.sum(weights_train))
 
             perms_train = np.random.permutation(len(data_train_all))
             perms_valid = np.random.permutation(len(data_valid_all))
