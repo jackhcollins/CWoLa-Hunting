@@ -512,15 +512,22 @@ class check_eff(keras.callbacks.Callback):
             my_true = self.validation_data[1].flatten()
             #Get the entries in category 0 ('bg')
             #Order these entries by NN prediction
-            ordered_bg_list = np.flip(np.sort(my_pred[my_true<0.5]),axis=0)
-            #Find the threshold above which only 2% of bg survives
-            thresh = ordered_bg_list[int(self.eff_rate*len(ordered_bg_list))]
-        
+            # ordered_bg_list = np.flip(np.sort(my_pred[my_true<0.5]),axis=0)
+            # #Find the threshold above which only 2% of bg survives
+            # thresh = ordered_bg_list[int(self.eff_rate*len(ordered_bg_list))]
+
+            bgs  = my_pred[my_true<0.5]
+            position = int((1-self.eff_rate)*len(bgs))
+            thresh = np.partition(bgs, position)[position]
+
             #Now get entries in category 1 ('sig')
             #Order these by NN output
-            ordered_sig_list = np.sort(my_pred[my_true>0.5]).flatten()
-            #Find fraction of signal events which survive a cut on the above threshold
-            sig_eff = 1.0 - 1.0*np.searchsorted(ordered_sig_list,thresh)/len(ordered_sig_list)
+            # ordered_sig_list = np.sort(my_pred[my_true>0.5]).flatten()
+            # #Find fraction of signal events which survive a cut on the above threshold
+            # sig_eff = 1.0 - 1.0*np.searchsorted(ordered_sig_list,thresh)/len(ordered_sig_list)
+
+            sigs = my_pred[my_true>0.5]
+            sig_eff = np.sum(sigs >= thresh)/len(sigs)
 
             if epoch > self.min_epoch:
                 #Increase patience timer by one epoch
