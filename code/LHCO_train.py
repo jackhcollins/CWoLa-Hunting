@@ -142,7 +142,11 @@ if '-trainonly' not in myargs:
     print("Setting default  '-trainonly':", myargs['-trainonly'])
 else:
     myargs['-trainonly'] = int(myargs['-trainonly'])
-
+if '-makeensemble' not in myargs:
+    myargs['-makeensemble'] = 0
+    print("Setting default  '-makeensemble':", myargs['-makeensemble'])
+else:
+    myargs['-makeensemble'] = int(myargs['-makeensemble'])
     
 if '-startk' not in myargs:
     myargs['-startk'] = 0
@@ -170,20 +174,18 @@ data_prefix = myargs['-in']
 output_prefix = myargs['-o']
 
 #Which auxilliary variables to use
-selected_vars = [6,33,10,37,12,39,15,42,18,45,32,59]
+selected_vars = [1,4,2,5,3,6]
 #Also use mJJ.
 selected_vars_plus = np.append([0],selected_vars)
 
 #Which 2d planes to make scatter plots in
-axes_list = [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[0,2],[0,4],[0,6],[0,8],[0,10],[1,3],[1,5],[1,7],[1,9],[1,11]]
-axes_labels = [['mJA','mJB'],['tau_1211A','tau1211B'],['tau_21A','tau21B'],['tau_32A','tau32B'],['tau_43A','tau43B'],['ntrkA','ntrkB'],
-               ['mJA','tau1211A'],['mJA','tau21A'],['mJA','tau32A'],['mJA','tau43A'],['mJA','ntrkA'],
-               ['mJB','tau1211B'],['mJB','tau21B'],['mJB','tau32B'],['mJB','tau43B'],['mJB','ntrkB']]
+axes_list = [[1,2],[3,4],[5,6]]
+axes_labels = [['mJA','mJB'],['tau_21A','tau21B'],['tau_32A','tau32B']]
 
 #Data binning in mJJ
-mjjmin = 2001
-mjjmax = 4350
-mybinboundaries = np.round(np.logspace(np.log10(mjjmin), np.log10(mjjmax), num=16))
+mjjmin = 2500
+mjjmax = 6000
+mybinboundaries = np.round(np.logspace(np.log10(mjjmin), np.log10(mjjmax), num=18))
 mybincenters = np.array([0.5*(mybinboundaries[i+1] + mybinboundaries[i]) for i in range(0,len(mybinboundaries)-1)])
 mybinwidths = np.array([mybinboundaries[i+1] - mybinboundaries[i] for i in range(0,len(mybinboundaries)-1)])
 mybincenterandwidth = np.vstack((mybincenters,mybinwidths)).T
@@ -192,58 +194,25 @@ def bin_data(data, binboundaries = mybinboundaries):
     databinned = []
     for i in range(0,len(binboundaries)-1):
         databinned.append(
-            np.array([np.delete(myrow,0) for myrow in data if (myrow[0] < binboundaries[i+1] and myrow[0] >= binboundaries[i])])
+            np.array([myrow for myrow in data if (myrow[0] < binboundaries[i+1] and myrow[0] >= binboundaries[i])])
         )
     return databinned
 
-#Load bg data
+import pandas as pd
+#load data
 print('\n')
-numfiles = int((myargs['-bgoffset'] + myargs['-bgevnts'])/100000) + 1
-print("Loading ", myargs['-in'] + 'bg_dataset_0.dat')
-bgdata = np.loadtxt(myargs['-in'] + 'bg_dataset_0.dat')
-for i in range(1,numfiles):
-    filename = myargs['-in'] + 'bg_dataset_' + str(i) + '.dat'
-    print("Loading ", filename)
-    bgdata = np.append(bgdata,np.loadtxt(filename),axis=0)
-bgdata = bgdata[myargs['-bgoffset']:myargs['-bgoffset']+myargs['-bgevnts']]
-bgdata = bgdata[bgdata[:,0]>=mjjmin]
-rand.shuffle(bgdata)
-
-#Load signal data
-if myargs['-signal']:
-    print('Adding signal data')
-    signaldata = np.loadtxt(myargs['-in'] + 'W_WW_3000_400.dat')[:myargs['-sigevnts']]
-    signaldata = signaldata[signaldata[:,0]>=mjjmin]
-    bg_plus_signal = np.nan_to_num(np.append(signaldata,bgdata,axis=0))
-    rand.shuffle(bg_plus_signal)
-    
-    bghist = np.histogram(bgdata[:,0],bins=mybinboundaries)[0]
-    sighist = np.histogram(signaldata[:,0],bins=mybinboundaries)[0]
-
-    B = bghist[bin_i-1] + bghist[bin_i] + bghist[bin_i+1]
-    S = sighist[bin_i-1] + sighist[bin_i] + sighist[bin_i+1]
-    print("\nIn Signal Region:")
-    print("S = ", S)
-    print("B = ", B)
-    print("S/B =", '%.4f' % (float(S)/float(B)))
-    print("S/sqrt(B)", '%.4f' % (float(S)/np.sqrt(float(B))))
-    print("\n")
-    del signaldata
-    del bgdata
-else:
-    print('Not adding signal data')
-    bg_plus_signal = np.nan_to_num(bgdata)
-    del bgdata
-sys.stdout.flush()
-
-# Create tau ratios
-bg_plus_signal[:,[18,45]] = np.nan_to_num(bg_plus_signal[:,[18,45]]/bg_plus_signal[:,[15,42]])
-bg_plus_signal[:,[15,42]] = np.nan_to_num(bg_plus_signal[:,[15,42]]/bg_plus_signal[:,[12,39]])
-bg_plus_signal[:,[12,39]] = np.nan_to_num(bg_plus_signal[:,[12,39]]/bg_plus_signal[:,[9,36]])
-bg_plus_signal[:,[10,37]] = np.nan_to_num(np.sqrt(bg_plus_signal[:,[10,37]])/bg_plus_signal[:,[9,36]])
-# Cut mJJ outliers
-bg_plus_signal = bg_plus_signal[(bg_plus_signal[:,6] < 500) & (bg_plus_signal[:,33] < 300)]
-
+print("Loading E:\projects\CWoLa-Hunting\LHCO_data\events_anomalydetection_v3.features.h5")
+f = pd.read_hdf("E:/projects/CWoLa-Hunting/LHCO_data/events_anomalydetection_v3.features.h5")
+data = f.values
+E1 = np.sqrt(np.square(np.linalg.norm(data[:,:3],axis=-1))-np.square(data[:,3]))
+E2 = np.sqrt(np.square(np.linalg.norm(data[:,7:10],axis=-1))-np.square(data[:,10]))
+mjj = np.sqrt(np.square(E1+E2)-np.square(np.linalg.norm(data[:,:3]+data[:,7:10],axis=-1)))
+bg_plus_signal = np.concatenate(
+    (mjj[:,None],data[:,3:4],data[:,5:6]/data[:,4:5],data[:,6:7]/data[:,5:6],
+    data[:,10:11],data[:,12:13]/data[:,11:12],data[:,13:14]/data[:,12:13]), axis=-1
+)
+bg_plus_signal = np.nan_to_num(bg_plus_signal)
+bg_plus_signal = bg_plus_signal[np.greater(mjj,mjjmin) & np.less(mjj,mjjmax)]
 
 # Preprocessor for data before feeding it to NN
 #   1) Take log off jet mass variables
@@ -252,12 +221,12 @@ def myprepreprocessor(predata, massvars=None):
     if massvars is None:
         massvars = [0,1]
     newdata = np.copy(predata)
-    newdata[:,massvars] = np.nan_to_num(np.log10(newdata[:,massvars]+40))
-    return newdata
+    newdata[:,massvars] = np.nan_to_num(np.log10((newdata[:,massvars]-30.)/newdata[:,0:1]+30./3000.))
+    return newdata[:,1:]
 
 
 bg_plus_signal=bg_plus_signal[:,selected_vars_plus]
-myscaler = preprocessing.StandardScaler().fit(myprepreprocessor(bg_plus_signal,massvars=[1,2])[:,1:])
+myscaler = preprocessing.StandardScaler().fit(myprepreprocessor(bg_plus_signal,massvars=[1,2]))
 def preprocess(data):
     return np.clip(myscaler.transform(myprepreprocessor(data,massvars=[0,1])),-3,3)
 rand.shuffle(bg_plus_signal)
@@ -289,13 +258,14 @@ model_utils[bin_i] = model_ensemble(bg_plus_signal_binned, bin_i = bin_i, kfolds
 gc.collect()
 
 if (not myargs['-loadonly']):
+# if True:
     #Loop over kfolds
     startnum = 0
     if myargs['-trainonly']:
         startnum = myargs['-startk']
         
     for k in range(startnum,myargs['-kfold']):
-        if (myargs['-endk'] > 0) & (k == myargs['-endk']):
+        if (myargs['-endk'] > 0) and (k == myargs['-endk']):
             print("Ending at k = ", k)
             sys.stdout.flush()
             quit()
@@ -303,16 +273,20 @@ if (not myargs['-loadonly']):
         
         #Loop over validation sets
         for l in range(myargs['-kfold']):
-            if (myargs['-endl'] > 0) & (l == myargs['-endl']):
+            if (myargs['-endl'] > 0) and (l == myargs['-endl']):
                 print("Ending at l = ", l)
                 sys.stdout.flush()
                 quit()
             if l == k:
                 continue
+
+            if myargs['-trainonly'] and (l < myargs['-startl']):
+                continue
+
             print('Starting lfold', l, 'of', myargs['-kfold'])
             
             data_train, data_valid, labels_train, labels_valid, weights_train, weights_valid = model_utils[bin_i].get_trainval_data(k,l)
-            
+
             for i in range(ntries):
                 print(" k =", k, "l =", l)
                 #Naming convention for model files.
@@ -320,7 +294,7 @@ if (not myargs['-loadonly']):
                 start = time.time()
                 
                 #The flag myargs['-loadonly'] allows to skip training step and just load pre-saved models.
-                if (not myargs['-loadonly']) & (not ((k == myargs['-startk']) & (l < myargs['-startl']))) & (k >= myargs['-startk']):
+                if (not myargs['-makeensemble']) & (not ((k == myargs['-startk']) & (l < myargs['-startl']))) & (k >= myargs['-startk']):
                     print("Now training model ", i + 1, " of ", ntries)
                     
                     K.clear_session()
@@ -346,7 +320,7 @@ if (not myargs['-loadonly']):
                     
                     #Following seems to work well for benchmarks. Not systematically optimized. I basically just played around until something worked.
                     #However, bias initialization seems very important. Keras relu by default initializes to 0 bias, and especially in the first layer will not move from that initialization during training. This is very suboptimal.
-                    model = Sequential()
+                    model = Sequential(name = str(bin_i) + "_" + str(k) + "_" + str(l) + "_" + str(i))
                     model.add(Dense(128, input_dim=numvars,use_bias=True,
                                     #activation='relu',
                                     bias_initializer = keras.initializers.TruncatedNormal(mean=0., stddev=0.04)))
@@ -408,7 +382,7 @@ if (not myargs['-loadonly']):
         model_utils[bin_i].print_scatter_avg_onek_signalregion(k,axes_list=axes_list,axes_labels=axes_labels,
                                                                rates = np.array([1. - myargs['-checkeff']]),
                                                                colors=['silver','firebrick'])
-        figfile=output_prefix + '_scatterk_' + str(k) + '.png'
+        figfile=output_prefix + '_scatterk_' + str(bin_i) + '_' + str(k) + '.png'
         print('Saving fig', figfile)
         plt.savefig(figfile)
         del ensemble_model
@@ -428,7 +402,7 @@ model_utils[bin_i].print_scatter_avg_allk_signalregion(axes_list=axes_list,axes_
                                                        rates = np.array([1. - myargs['-checkeff']]),
                                                        colors=['silver','firebrick'])
 
-figfile=output_prefix + '_scatter_allk.png'
+figfile=output_prefix + '_scatter_' + str(bin_i) + '_allk.png'
 print('Saving fig', figfile)
 plt.savefig(figfile)
 
@@ -474,7 +448,7 @@ for key in model_utils.keys():
     for i, eff in enumerate(chosen_effs):
         print("Getting p-value for eff:", eff)
 
-        pplotname = output_prefix + '_pplot_' + str(eff) + '.png'
+        pplotname = output_prefix + '_pplot_' + str(bin_i) + '_' + str(eff) + '.png'
         get_p_value(bincutcountslist[i],mybinboundaries,mask=[bin_i-1,bin_i,bin_i+1],verbose=1,
                     plotfile=pplotname)
 

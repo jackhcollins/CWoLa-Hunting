@@ -7,15 +7,16 @@ from sklearn import preprocessing
 from sklearn.decomposition import PCA
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 from scipy import stats
-import keras as keras
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Activation, Dropout
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from keras import regularizers
+import tensorflow as tf
+import tensorflow.keras as keras
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Dense, Activation, Dropout
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras import regularizers
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 from sklearn.model_selection import train_test_split
 import pickle as pickle
-import tensorflow as tf
+
 import time
 import glob
 import numpy.ma as ma
@@ -477,7 +478,9 @@ class check_eff(keras.callbacks.Callback):
                  patience=70,                      # Epochs to wait since last performance increase
                  plot_period=1,                    # How frequently to plot performance metric
                  batch_size=5000,
-                 max_epochs=2000):                 # Batch size for NN prediction
+                 max_epochs=2000,                   # Batch size for NN prediction
+                 validation_data=None):
+        self.validation_data = validation_data   
         self.verbose = verbose
         self.filename = filename
         self.training_data = preprocessed_training_data

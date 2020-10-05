@@ -556,7 +556,9 @@ class check_eff(keras.callbacks.Callback):
                  plot_period=1,                    # How frequently to plot performance metric
                  batch_size=5000,                  # Batch size for NN prediction
                  max_epochs=2000,
-                 plotmode="save"):                 
+                 plotmode="save",
+                 validatation_data=None):
+        self.validation_data = validation_data                 
         self.verbose = verbose
         self.filename = filename
         if avg_length%2 == 0:
