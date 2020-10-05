@@ -185,7 +185,7 @@ selected_vars = [1,4,2,5,3,6]
 selected_vars_plus = np.append([0],selected_vars)
 
 #Which 2d planes to make scatter plots in
-axes_list = [[1,4],[2,5],[3,6]]
+axes_list = [[1,5],[2,6],[3,7]]
 axes_labels = [['px1','px2'],['py1','py2'],['pz1','pz2']]
 
 #Data binning in mJJ
