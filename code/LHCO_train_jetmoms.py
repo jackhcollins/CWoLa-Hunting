@@ -174,6 +174,12 @@ if '-lambda' not in myargs:
     print("Setting default  '-lambda':", myargs['-lambda'])
 else:
     myargs['-lambda'] = float(myargs['-lambda'])
+
+if '-tossed' not in myargs:
+    myargs['-tossed'] = 0
+    print("Setting default  '-tossed':", myargs['-tossed'])
+else:
+    myargs['-tossed'] = int(myargs['-tossed'])
     
 bin_i = myargs['-bin']    
 data_prefix = myargs['-in']
@@ -185,8 +191,8 @@ selected_vars = [1,4,2,5,3,6]
 selected_vars_plus = np.append([0],selected_vars)
 
 #Which 2d planes to make scatter plots in
-axes_list = [[1,5],[2,6],[3,7]]
-axes_labels = [['px1','px2'],['py1','py2'],['pz1','pz2']]
+axes_list = [[41,42],[44,45],[43,46],[47,48],[49,50]]
+axes_labels = [['pT1','pT2'],['eta1','eta2'],['pT3','eta3'],['m123','m12'],['m13','m23']]
 
 #Data binning in mJJ
 mjjmin = 2800
@@ -207,10 +213,10 @@ def bin_data(data, binboundaries = mybinboundaries):
 import pandas as pd
 #load data
 print('\n')
-print("Loading " + myargs['-in'] + "/BB3_jetmoms.h5")
-f = pd.read_hdf(myargs['-in'] + "/BB3_jetmoms.h5")
-print("Loading " + myargs['-in'] + "/BB2_jetmoms.h5")
-f_bg = pd.read_hdf(myargs['-in'] + "/BB2_jetmoms.h5")
+print("Loading " + myargs['-in'] + "/BB3_jetmoms_extra.h5")
+f = pd.read_hdf(myargs['-in'] + "/BB3_jetmoms_extra.h5")
+print("Loading " + myargs['-in'] + "/BB2_jetmoms_extra.h5")
+f_bg = pd.read_hdf(myargs['-in'] + "/BB2_jetmoms_extra.h5")
 
 bg_plus_signal = f.values
 bg_plus_signal_bg = f_bg.values
@@ -228,7 +234,7 @@ bg_plus_signal_bg = bg_plus_signal_bg[np.greater(mjj_bg,mjjmin) & np.less(mjj_bg
 #   2) Standard scale all auxilliary variables
 def preprocess(predata, massvars=None):
     newdata = np.copy(predata)
-    return newdata[:,1:]
+    return newdata[:,1:41]
 
 
 # bg_plus_signal=bg_plus_signal[:,selected_vars_plus]
@@ -300,9 +306,13 @@ if (not myargs['-loadonly']):
 
             data_train_all = np.concatenate((data_train,data_train_bg),axis=0)
             data_valid_all = np.concatenate((data_valid,data_valid_bg),axis=0)
+            if -myargs['-tossed'] > 0:
+                labels_train_bg = 1-labels_train_bg
+                labels_valid_bg = 1-labels_valid_bg
             labels_train_all = np.concatenate((labels_train,labels_train_bg),axis=0)
             labels_valid_all = np.concatenate((labels_valid,labels_valid_bg),axis=0)
             ratio = np.sum(weights_train)/np.sum(weights_train_bg)
+            print("weight ratio:", ratio)
             weights_train_all = np.concatenate((weights_train,-myargs['-lambda']*ratio*weights_train_bg),axis=0)
             weights_valid_all = np.concatenate((weights_valid,-myargs['-lambda']*ratio*weights_valid_bg),axis=0)
             # print("bg weights:",np.sum(-myargs['-lambda']*weights_train_bg))
