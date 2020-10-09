@@ -563,15 +563,21 @@ class check_eff(keras.callbacks.Callback):
                 my_true = self.training_data[1].flatten()
                 #Get the entries in category 0 ('bg')
                 #Order these entries by NN prediction
-                ordered_bg_list = np.flip(np.sort(my_pred[my_true<0.5]),axis=0)
+                # ordered_bg_list = np.flip(np.sort(my_pred[my_true<0.5]),axis=0)
                 #Find the threshold above which only 2% of bg survives
-                thresh = ordered_bg_list[int(self.eff_rate*len(ordered_bg_list))]
-                
+                # thresh = ordered_bg_list[int(self.eff_rate*len(ordered_bg_list))]
+                bg_data = my_pred[my_true<0.5].flatten()
+                loc = int((1-self.eff_rate)*len(bg_data))
+                thresh = np.partition(bg_data,loc)[loc]
+
                 #Now get entries in category 1 ('sig')
                 #Order these by NN output
-                ordered_sig_list = np.sort(my_pred[my_true>0.5]).flatten()
+                # ordered_sig_list = np.sort(my_pred[my_true>0.5]).flatten()
                 #Find fraction of signal events which survive a cut on the above threshold
-                sig_eff = 1.0 - 1.0*np.searchsorted(ordered_sig_list,thresh)/len(ordered_sig_list)
+                # sig_eff = 1.0 - 1.0*np.searchsorted(ordered_sig_list,thresh)/len(ordered_sig_list)
+                sig_data = my_pred[my_true>0.5]
+                sig_eff=np.sum(sig_data>thresh)/len(sig_data)
+
                 self.effs_train.append(sig_eff)
 
                 if(len(self.effs_train) <= self.avg_length):
@@ -588,26 +594,26 @@ class check_eff(keras.callbacks.Callback):
                         plt.plot(self.effs_train_avg,color='C0',linestyle='--')
                     plt.grid(b=True)
 
-            # If we have waited too long with no improvement, halt training.
-            if ((self.patience > 0) & (self.n_wait > self.patience)) or (epoch == self.max_epochs-1):
-                if self.verbose > -1:
-                    plt.close('all')
-                    plt.figure(figsize=(14,5))
-                    plt.subplot(1, 2, 1)
-                    plt.plot(self.effs_val,color='C1')
-                    plt.plot(self.effs_train,color='C0')
-                    if(self.avg_length > 1):
-                        plt.plot(self.effs_val_avg,color='C1',linestyle='--')
-                        plt.plot(self.effs_train_avg,color='C0',linestyle='--')
-                    plt.grid(b=True)
-                    plt.subplot(1, 2, 2)
-                    plt.plot(self.val_loss,color='C1')
-                    plt.plot(self.loss,color='C0')
-                    plt.grid(b=True)
-                    print("Saving fig:", self.filename[:-3] + "_losseffplots.png")
-                    plt.savefig(self.filename[:-3] + "_losseffplots.png")
-                    self.verbose = 0
-                self.model.stop_training = True
+        # If we have waited too long with no improvement, halt training.
+        if ((self.patience > 0) & (self.n_wait > self.patience)) or (epoch == self.max_epochs-1):
+            if self.verbose > -1:
+                plt.close('all')
+                plt.figure(figsize=(14,5))
+                plt.subplot(1, 2, 1)
+                plt.plot(self.effs_val,color='C1')
+                plt.plot(self.effs_train,color='C0')
+                if(self.avg_length > 1):
+                    plt.plot(self.effs_val_avg,color='C1',linestyle='--')
+                    plt.plot(self.effs_train_avg,color='C0',linestyle='--')
+                plt.grid(b=True)
+                plt.subplot(1, 2, 2)
+                plt.plot(self.val_loss,color='C1')
+                plt.plot(self.loss,color='C0')
+                plt.grid(b=True)
+                print("Saving fig:", self.filename[:-3] + "_losseffplots.png")
+                plt.savefig(self.filename[:-3] + "_losseffplots.png")
+                self.verbose = 0
+            self.model.stop_training = True
 
 
                 
