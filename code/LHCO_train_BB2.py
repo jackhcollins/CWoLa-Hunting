@@ -75,8 +75,8 @@ if '-o' not in myargs:
     print("Setting default output name '-o': '~/model'")
     myargs['-o'] = "~/model"
 if '-in' not in myargs:
-    print("Setting default input directory to '/data1/users/jcollins/'")
-    myargs['-in'] = '/data1/users/jcollins/'
+    print("Setting default input file to 'E:/projects/CWoLa-Hunting/LHCO_data/BB2_features.h5'")
+    myargs['-in'] = 'E:/projects/CWoLa-Hunting/LHCO_data/BB2_features.h5'
 if '-bin' not in myargs:
     myargs['-bin'] = 7
     print("Setting default bin '-bin':", myargs['-bin'])
@@ -201,8 +201,8 @@ def bin_data(data, binboundaries = mybinboundaries):
 import pandas as pd
 #load data
 print('\n')
-print("Loading E:\projects\CWoLa-Hunting\LHCO_data\BB2_features.h5")
-f = pd.read_hdf("E:/projects/CWoLa-Hunting/LHCO_data/BB2_features.h5")
+print("Loading", myargs['-in'])
+f = pd.read_hdf(myargs['-in'])
 data = f.values
 # E1 = np.sqrt(np.square(np.linalg.norm(data[:,:3],axis=-1))-np.square(data[:,3]))
 # E2 = np.sqrt(np.square(np.linalg.norm(data[:,7:10],axis=-1))-np.square(data[:,10]))
