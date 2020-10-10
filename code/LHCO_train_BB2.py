@@ -174,13 +174,13 @@ data_prefix = myargs['-in']
 output_prefix = myargs['-o']
 
 #Which auxilliary variables to use
-selected_vars = [1,2,3,4,5,6,7,8,9,10]
+selected_vars = [1,2,3,4,5,6]
 #Also use mJJ.
 selected_vars_plus = np.append([0],selected_vars)
 
 #Which 2d planes to make scatter plots in
-axes_list = [[1,2],[3,4],[5,6],[7,8],[9,10]]
-axes_labels = [['mJA','mJB'],['tau_21A','tau21B'],['tau_32A','tau32B'],['tau_43A','tau43B'],['n1','n2']]
+axes_list = [[1,2],[3,4],[5,6]]
+axes_labels = [['mJA','mJB'],['tau_21A','tau_21B'],['tau_32A','tau32B']]
 
 #Data binning in mJJ
 mjjmin = 2500
