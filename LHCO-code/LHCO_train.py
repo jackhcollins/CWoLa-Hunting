@@ -209,8 +209,8 @@ print('\n')
 print("Loading E:\projects\CWoLa-Hunting\LHCO_data\events_anomalydetection_v3.features.h5")
 f = pd.read_hdf("E:/projects/CWoLa-Hunting/LHCO_data/events_anomalydetection_v3.features.h5")
 data = f.values
-E1 = np.sqrt(np.square(np.linalg.norm(data[:,:3],axis=-1))-np.square(data[:,3]))
-E2 = np.sqrt(np.square(np.linalg.norm(data[:,7:10],axis=-1))-np.square(data[:,10]))
+E1 = np.sqrt(np.square(np.linalg.norm(data[:,:3],axis=-1))+np.square(data[:,3]))
+E2 = np.sqrt(np.square(np.linalg.norm(data[:,7:10],axis=-1))+np.square(data[:,10]))
 mjj = np.sqrt(np.square(E1+E2)-np.square(np.linalg.norm(data[:,:3]+data[:,7:10],axis=-1)))
 bg_plus_signal = np.concatenate(
     (mjj[:,None],data[:,3:4],data[:,5:6]/data[:,4:5],data[:,6:7]/data[:,5:6],
